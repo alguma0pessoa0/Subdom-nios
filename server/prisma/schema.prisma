@@ -1,0 +1,123 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      UserRole @default(USER)
+  plan      Plan     @default(FREE)
+  
+  // API Keys
+  apiKeys   ApiKey[]
+  
+  // Scans
+  scans     Scan[]
+  
+  // Billing
+  stripeCustomerId String?
+  subscriptionId   String?
+  
+  // Audit
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE    // 5 scans/day, Light only
+  PRO     // Unlimited, Deep scan
+  ENTERPRISE // Multi-user, Priority
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  key       String   @unique @default(cuid())
+  name      String
+  active    Boolean  @default(true)
+  
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime?
+  
+  @@map("api_keys")
+}
+
+model Scan {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  domain        String
+  scanType      ScanType
+  ips           Int          @default(0)
+  totalFound    Int          @default(0)
+  executionTime Int          // milliseconds
+  
+  subdomains    Subdomain[]
+  
+  status        ScanStatus   @default(PENDING)
+  errorMessage  String?
+  
+  techniques    String[]     // Array of technique names used
+  
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  @@map("scans")
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum ScanType {
+  LIGHT
+  DEEP
+}
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Subdomain {
+  id            String   @id @default(cuid())
+  scanId        String
+  scan          Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  
+  subdomain     String
+  ip            String
+  ips           String[] // Multiple IPs if any
+  status        String   // "active", "inactive"
+  responseTime  Int      // milliseconds
+  httpCode      Int?
+  ssl           Boolean  @default(false)
+  cname         String?
+  technology    String?  // Detected webapp tech
+  port          Int?
+  
+  createdAt     DateTime @default(now())
+  
+  @@map("subdomains")
+  @@index([scanId])
+  @@index([subdomain])
+}
